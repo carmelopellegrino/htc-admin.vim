@@ -1,7 +1,7 @@
 " Vim syntax file
 " Language:         HTCondor Configuration file
 " Maintainer:       Carmelo Pellegrino <carmelo.pellegrino@cnaf.infn.it>
-" Latest Revision:  2026-02-04
+" Latest Revision:  2026-02-27
 
 if exists("b:current_syntax")
   finish
