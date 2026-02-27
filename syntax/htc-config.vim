@@ -1,5 +1,5 @@
 " Vim syntax file
-" Language:         HTCondor submit file
+" Language:         HTCondor Configuration file
 " Maintainer:       Carmelo Pellegrino <carmelo.pellegrino@cnaf.infn.it>
 " Latest Revision:  2026-02-04
 
