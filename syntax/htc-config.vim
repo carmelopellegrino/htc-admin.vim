@@ -41,7 +41,7 @@ syn region htcValue oneline contains=@htcValues start=/=/  end=/$/ transparent
 syn region htcComment oneline start=/^#/ end=/$/
 
 " Invalid comments
-syn region htcInvalidComment oneline start=/^.*#/ end=/$/
+syn region htcInvalidComment oneline start=/^.?#/ end=/$/
 
 " HTC Knob
 syn keyword htcKnob arguments
