@@ -33,7 +33,7 @@ syn keyword htcUniverse    docker
 syn keyword htcUniverse    container
 syn keyword htcTransOut    ON_EXIT ON_EXIT_OR_EVICT ON_SUCCESS
 
-syn cluster htcValues contains=htcString,htcNumber,htcNumberFloat,htcBool,htcUniverse,htcTransOut,htcVariable
+syn cluster htcValues contains=htcString,htcNumber,htcNumberFloat,htcBool,htcUniverse,htcTransOut,htcVariable,htcInvalidComment
 
 syn region htcValue oneline contains=@htcValues start=/=/  end=/$/ transparent
 
