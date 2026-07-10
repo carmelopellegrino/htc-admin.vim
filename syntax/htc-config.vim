@@ -37,7 +37,13 @@ syn keyword htcTransOut    ON_EXIT ON_EXIT_OR_EVICT ON_SUCCESS
 syn match htcComment /^\s*#.*/
 
 " Invalid comments
-syn match htcInvalidComment /\S.\{-}\zs#.*$/ containedin=ALLBUT,htcComment
+let s:htc_double_string = '"\%([^"\\]\|\\.\)*\%("\|$\)'
+let s:htc_backtick_string = '`\%([^`\\]\|\\.\)*\%(`\|$\)'
+let s:htc_single_string = '\(s\)\@<!''\(s \|t \)\@!\%([^''\\]\|\\.\)*\%(''\|$\)'
+let s:htc_plain_quote = '\(s\)\@<=''\|''\(s \|t \)\@='
+let s:htc_inline_part = '\%(' . s:htc_double_string . '\|' . s:htc_backtick_string . '\|' . s:htc_single_string . '\|' . s:htc_plain_quote . '\|[^#"''`]\)'
+let s:htc_inline_start = '\%(' . s:htc_double_string . '\|' . s:htc_backtick_string . '\|' . s:htc_single_string . '\|' . s:htc_plain_quote . '\|[^#[:space:]"''`]\)'
+let b:htc_invalid_comment_pattern = '\c^\s*' . s:htc_inline_start . s:htc_inline_part . '*#.*$'
 
 syn cluster htcValues contains=htcString,htcNumber,htcNumberFloat,htcBool,htcUniverse,htcTransOut,htcVariable,htcInvalidComment
 
@@ -1518,12 +1524,38 @@ syn keyword htcJobClassAd UserLog
 syn keyword htcJobClassAd WhenToTransferOutput
 syn case match
 
+" Syntax keywords have priority over line matches, so use a window-local
+" overlay to mark the whole invalid line, including known HTCondor knobs.
+function! s:ApplyInvalidCommentMatch() abort
+  if !exists('*matchadd') || !exists('b:htc_invalid_comment_pattern')
+    return
+  endif
+
+  call s:ClearInvalidCommentMatch()
+  let w:htc_invalid_comment_match = matchadd('htcInvalidComment', b:htc_invalid_comment_pattern, 100)
+endfunction
+
+function! s:ClearInvalidCommentMatch() abort
+  if exists('w:htc_invalid_comment_match')
+    silent! call matchdelete(w:htc_invalid_comment_match)
+    unlet w:htc_invalid_comment_match
+  endif
+endfunction
+
+augroup htc_config_invalid_comment
+  autocmd! * <buffer>
+  autocmd BufWinEnter,WinEnter <buffer> call <SID>ApplyInvalidCommentMatch()
+  autocmd BufWinLeave <buffer> call <SID>ClearInvalidCommentMatch()
+augroup END
+
+call s:ApplyInvalidCommentMatch()
+
 " Highlight Links
 hi def link htcNumber           Number
 hi def link htcNumberFloat      Float
 
 hi def link htcComment          Comment
-hi def link htcInvalidComment   DiffDelete
+hi def htcInvalidComment        ctermbg=9 guibg=#ff0000
 
 hi def link htcBool             Boolean
 hi def link htcString           String
@@ -1545,4 +1577,10 @@ hi def link htcVariable         Statement
 let b:current_syntax = "htc"
 
 let &cpo = s:cpo_save
+unlet s:htc_double_string
+unlet s:htc_backtick_string
+unlet s:htc_single_string
+unlet s:htc_plain_quote
+unlet s:htc_inline_part
+unlet s:htc_inline_start
 unlet s:cpo_save
