@@ -1,4 +1,7 @@
-au BufNewFile,BufRead condor_config set filetype=htc-config
-au BufNewFile,BufRead condor_config.local set filetype=htc-config
-au BufNewFile,BufRead /etc/condor/config.d/* set filetype=htc-config
-au BufNewFile,BufRead /etc/condor-ce/config.d/* set filetype=htc-config
+augroup htc_config_ftdetect
+  autocmd!
+  autocmd BufNewFile,BufRead condor_config setfiletype htc-config
+  autocmd BufNewFile,BufRead condor_config.local setfiletype htc-config
+  autocmd BufNewFile,BufRead /etc/condor/config.d/* setfiletype htc-config
+  autocmd BufNewFile,BufRead /etc/condor-ce/config.d/* setfiletype htc-config
+augroup END
