@@ -1,7 +1,7 @@
 " Vim syntax file
 " Language:         HTCondor Configuration file
 " Maintainer:       Carmelo Pellegrino <carmelo.pellegrino@cnaf.infn.it>
-" Latest Revision:  2026-02-27
+" Latest Revision:  2026-07-21
 
 if exists("b:current_syntax")
   finish
@@ -12,14 +12,18 @@ set cpo&vim
 syn case ignore
 
 " HTC constants
-syn region htcVariable     start="\$("  end=")" end=/$/ keepend contained
-syn region htcString       start=/"/  end=/"/  end=/$/  skip=/\\./ contains=htcVariable
-syn region htcString       start=/`/  end=/`/  end=/$/  skip=/\\./ contains=htcVariable
-syn region htcString       start=/\(s\)\@<!'\(s \|t \)\@!/  end=/'/  end=/$/  skip=/\\./ contains=htcVariable
+syn match   htcStringEscape display /\\./ contained
+syn region  htcVariable     start=/\$\{1,2}(/  end=/)/ end=/$/ keepend contained contains=htcVariable
+syn region  htcString       start=/"/  end=/"/  end=/$/  skip=/\\./ contains=htcVariable,htcConfigFunction,htcClassAdFunction,htcStringEscape
+syn region  htcString       start=/`/  end=/`/  end=/$/  skip=/\\./ contains=htcVariable,htcConfigFunction,htcClassAdFunction,htcStringEscape
+syn region  htcString       start=/\(s\)\@<!'\(s \|t \)\@!/  end=/'/  end=/$/  skip=/\\./ contains=htcVariable,htcConfigFunction,htcClassAdFunction,htcStringEscape
 
-syn keyword htcBool        true false undefined yes no
-syn match   htcNumber      display '\<\d\+\>'
-syn match   htcNumberFloat display '\<\d\+\.\d\+\([eE][+-]\?\d\+\)\?\>'
+syn keyword htcBool         true false undefined yes no
+syn keyword htcClassAdConst error contained
+syn match   htcNumberFloat  display '\<\d\+\.\d*\%([eE][+-]\=\d\+\)\=\>'
+syn match   htcNumberFloat  display '\<\d\+\%([eE][+-]\=\d\+\)\>'
+syn match   htcNumber       display '\<0x\x\+\>'
+syn match   htcNumber       display '\<\d\+\>'
 
 " HTC universe
 syn keyword htcUniverse    vanilla
@@ -34,7 +38,8 @@ syn keyword htcUniverse    container
 syn keyword htcTransOut    ON_EXIT ON_EXIT_OR_EVICT ON_SUCCESS
 
 " Comments
-syn match htcComment /^\s*#.*/
+syn keyword htcTodo TODO FIXME XXX NOTE contained
+syn match   htcComment /^\s*#.*/ contains=htcTodo
 
 " Invalid comments
 let s:htc_double_string = '"\%([^"\\]\|\\.\)*\%("\|$\)'
@@ -43,11 +48,39 @@ let s:htc_single_string = '\(s\)\@<!''\(s \|t \)\@!\%([^''\\]\|\\.\)*\%(''\|$\)'
 let s:htc_plain_quote = '\(s\)\@<=''\|''\(s \|t \)\@='
 let s:htc_inline_part = '\%(' . s:htc_double_string . '\|' . s:htc_backtick_string . '\|' . s:htc_single_string . '\|' . s:htc_plain_quote . '\|[^#"''`]\)'
 let s:htc_inline_start = '\%(' . s:htc_double_string . '\|' . s:htc_backtick_string . '\|' . s:htc_single_string . '\|' . s:htc_plain_quote . '\|[^#[:space:]"''`]\)'
-let b:htc_invalid_comment_pattern = '\c^\s*' . s:htc_inline_start . s:htc_inline_part . '*#.*$'
+let s:htc_regexp_assignment = '\s*[+[:alpha:]_][[:alnum:]_.-]*_REGEXP\s*='
+let b:htc_invalid_comment_pattern = '\c^\%(' . s:htc_regexp_assignment . '\)\@!\s*' . s:htc_inline_start . s:htc_inline_part . '*#.*$'
 
-syn cluster htcValues contains=htcString,htcNumber,htcNumberFloat,htcBool,htcUniverse,htcTransOut,htcVariable,htcInvalidComment
+" Configuration line continuations
+syn match   htcLineContinuation    display /\\$/ contained
 
-syn region htcValue oneline contains=@htcValues start=/=/ end=/$/ transparent
+" ClassAd expression punctuation and operators
+syn match   htcClassAdScope        display /\c\<\%(MY\|TARGET\|PARENT\)\s*\./ contained
+syn keyword htcClassAdKeyword      is isnt contained
+syn match   htcOperator            display '\%(=?=\|=!=\|==\|!=\|<=\|>=\|&&\|||\|[<>!+\-*/%?:]\)' contained
+syn match   htcDelimiter           display '[][(){};,]' contained
+
+" Common scalar values
+syn match   htcUrl                 display #\c\<\%(https\?\|ftp\)://[^[:space:]"'`]\+# contained
+syn match   htcIPv4                display '\<\d\{1,3}\%(\.\d\{1,3}\)\{3}\%(:\d\+\)\?\>' contained
+syn match   htcIPv6                display '\<\x\{1,4}\%(:\x\{1,4}\)\{2,7}\%(:\d\+\)\?\>' contained
+syn match   htcPath                display #\%(^\|[[:space:]=:,]\)\zs\%(/\|\~/\)[^[:space:],"'`)]\+# contained
+syn keyword htcDebugFlag           D_ALWAYS D_ERROR D_STATUS D_FULLDEBUG D_DAEMONCORE D_COMMAND D_PRIV D_SECURITY D_CONFIG D_PROTOCOL D_LOAD D_KEYBOARD D_JOB D_MACHINE D_SYSCALLS D_MATCH D_NETWORK D_HOSTNAME D_ACCOUNTANT D_PID D_FDS D_CAT D_NOHEADER D_TIMESTAMP D_SUB_SECOND D_CATEGORY D_IDENT D_BACKTRACE D_VERBOSE D_AUDIT D_TEST D_PERF_TRACE D_STATS D_FAILURE D_MATERIALIZE contained
+syn keyword htcState               Owner Unclaimed Claimed Matched Preempting Drained Backfill Idle Busy Suspended Vacating Killing Benchmarking contained
+
+" Configuration macro functions
+syn match htcConfigFunction /\C\$\%(CHOICE\|ENV\|DIRNAME\|BASENAME\|INT\|RANDOM_CHOICE\|RANDOM_INTEGER\|REAL\|SUBSTR\|STRING\|EVAL\)\>\ze\s*(/
+syn match htcConfigFunction /\C\$F[fpduwnxbqa]\+\ze\s*(/
+
+" ClassAd functions usable in configuration expressions
+syn match htcClassAdFunction /\c\<\%(eval\|unparse\|unresolved\|ifThenElse\|isUndefined\|isError\|isString\|isInteger\|isReal\|isList\|isClassAd\|isBoolean\|isAbstime\|isReltime\|member\|anyCompare\|allCompare\|identicalMember\|int\|real\|string\|bool\|absTime\|relTime\|floor\|ceiling\|pow\|quantize\|round\|random\|sum\|avg\|min\|max\|strcat\|join\|substr\|strcmp\|stricmp\|versioncmp\|versionGT\|versionGE\|versionLT\|versionLE\|versionEQ\|version_in_range\|toUpper\|toLower\|size\|split\|splitUserName\|splitSlotName\|time\|formatTime\|interval\|evalInEachContext\|countMatches\|debug\|envV1ToV2\|mergeEnvironment\|stringListSize\|stringListSum\|stringListAvg\|stringListMin\|stringListMax\|stringListMember\|stringListIMember\|stringListsIntersect\|stringListSubsetMatch\|stringListISubsetMatch\|regexp\|regexpMember\|regexps\|replace\|replaceall\|stringList_regexpMember\|userHome\|userMap\)\>\ze\s*(/
+
+syn cluster htcValues contains=htcString,htcStringEscape,htcNumber,htcNumberFloat,htcBool,htcClassAdConst,htcUniverse,htcTransOut,htcVariable,htcConfigFunction,htcClassAdFunction,htcClassAdScope,htcClassAdKeyword,htcOperator,htcDelimiter,htcUrl,htcIPv4,htcIPv6,htcPath,htcDebugFlag,htcState,htcMachineClassAd,htcJobClassAd,htcLineContinuation,htcInvalidComment
+
+syn region htcValue oneline matchgroup=htcAssignment contains=@htcValues start=/=/ end=/$/
+
+" Fallback for bare assignment names that are not recognized as known knobs below.
+syn match   htcCustomKnob display '^\s*\zs[[:alpha:]_][[:alnum:]_.-]*\ze\s*='
 
 " HTC Knob
 syntax case ignore
@@ -1188,10 +1221,218 @@ syn keyword htcKnob XEN_ALLOW_HARDWARE_VT_SUSPEND
 syn keyword htcKnob XEN_BOOTLOADER
 syn keyword htcKnob XEN_BRIDGE_SCRIPT
 syn keyword htcKnob XEN_SCRIPT
+" HTCondor 25.11 documented configuration knobs missing from the legacy list
+" Source: https://htcondor.readthedocs.io/en/latest/admin-manual/configuration/all.html
+syn keyword htcKnob ABSENT_EXPIRE_ADS_AFTER ABSENT_REQUIREMENTS ABSENT_SUBMITTER_LIFETIME ABSENT_SUBMITTER_UPDATE_RATE ADD_SIGNIFICANT_ATTRIBUTES ADVERTISE_PSLOT_ROLLUP_INFORMATION
+syn keyword htcKnob ALIVE_INTERVAL ALLOW_PSLOT_PREEMPTION ALLOW_SCRIPTS_TO_RUN_AS_EXECUTABLES ALTERNATE_JOB_SPOOL ANNEX_DEFAULT_ACCESS_KEY_FILE ANNEX_DEFAULT_ODI_IMAGE_ID
+syn keyword htcKnob ANNEX_DEFAULT_ODI_INSTANCE_PROFILE_ARN ANNEX_DEFAULT_ODI_KEY_NAME ANNEX_DEFAULT_ODI_LEASE_FUNCTION_ARN ANNEX_DEFAULT_ODI_SECURITY_GROUP_IDS ANNEX_DEFAULT_S3_BUCKET ANNEX_DEFAULT_SECRET_KEY_FILE
+syn keyword htcKnob ANNEX_DEFAULT_SFR_CONFIG_FILE ANNEX_DEFAULT_SFR_LEASE_FUNCTION_ARN ASSIGN_CPU_AFFINITY ASSUME_COMPATIBLE_MULTIFILE_PLUGINS AUTH_SSL_CLIENT_CERTFILE AUTH_SSL_CLIENT_KEYFILE
+syn keyword htcKnob AUTO_USE_FEATURE_PelicanRetryPolicy BENCHMARKS_CONFIG_VAL BOINC_Arguments BOINC_Environment BOINC_Error BOINC_Executable
+syn keyword htcKnob BOINC_GAHP BOINC_InitialDir BOINC_Output BOINC_Owner BOINC_Universe BYTES_REQUIRED_TO_QUEUE_FOR_TRANSFER
+syn keyword htcKnob CCB_READ_BUFFER CCB_REQUIRED_TO_START CCB_TIMEOUT CCB_WRITE_BUFFER CGROUP_ALL_DAEMONS CGROUP_LOW_MEMORY_LIMIT
+syn keyword htcKnob CHECKPOINT_CLEANUP_TIMEOUT CHECK_REACTIVATE_AFTER_CHECKPOINT CLASSAD_LIFETIME CLIENT_TIMEOUT COLLECTOR_CLASS_HISTORY_SIZE COLLECTOR_DAEMON_HISTORY_SIZE
+syn keyword htcKnob COLLECTOR_DAEMON_STATS COLLECTOR_FORWARD_INTERVAL COLLECTOR_PERSISTENT_AD_LOG COLLECTOR_REQUIREMENTS CONDOR_FSYNC CONDOR_IDS
+syn keyword htcKnob CONDOR_SSHD CONDOR_SSH_KEYGEN CONTAINER_IMAGES_COMMON_BY_DEFAULT CREATE_CGROUP_WITHOUT_ROOT CREDMON_OAUTH_TOKEN_MINIMUM CREDMON_OAUTH_TOKEN_REFRESH
+syn keyword htcKnob CREDMON_WEB_PREFIX DAEMON_SHUTDOWN DAEMON_SHUTDOWN_FAST DAGMAN_DISABLE_ADMIN_THROTTLE_LIMITING DAGMAN_DISABLE_PORT DAGMAN_INHERIT_ATTRS
+syn keyword htcKnob DAGMAN_INHERIT_ATTRS_PREFIX DAGMAN_METRICS_FILE_VERSION DAGMAN_NODE_JOB_FAILURE_TOLERANCE DAGMAN_PRINT_JOB_TABLE_INTERVAL DAGMAN_PRODUCE_JOB_CREDENTIALS DAGMAN_USE_OLD_FILE_PARSER
+syn keyword htcKnob DedicatedScheduler DEDICATED_EXECUTE_ACCOUNT_REGEXP DEDICATED_SCHEDULER_WAIT_FOR_SPOOLER DEFAULT_CONTAINER_IMAGE DEFAULT_DRAINING_START_EXPR DEFAULT_NUM_EXTRA_CHECKPOINTS
+syn keyword htcKnob DEFAULT_USERLOG_FORMAT_OPTIONS DEFRAG_SCHEDULE DISK DOCKER_EXTRA_ARGUMENTS DOCKER_LOG_DRIVER_NONE DOCKER_MOUNT_VOLUMES
+syn keyword htcKnob DOCKER_NETWORKS DOCKER_NETWORK_NAME DOCKER_SHM_SIZE DOCKER_SKIP_IMAGE_ARCH_CHECK DOCKER_VOLUMES DOCKER_VOLUME_DIR_xxx_MOUNT_IF
+syn keyword htcKnob DOT_NET_VERSIONS DYNAMIC_RUN_ACCOUNT_LOCAL_GROUP EC2_GAHP_RATE_LIMIT EC2_RESOURCE_TIMEOUT EMAIL_SIGNATURE ENABLE_CHIRP
+syn keyword htcKnob ENABLE_SSH_TO_JOB ENABLE_URL_TRANSFERS ENFORCE_CPU_AFFINITY EVENT_LOG_FORMAT_OPTIONS EVICT_BACKFILL EXECUTE_LOGIN_IS_DEDICATED
+syn keyword htcKnob EXPIRE_INVALIDATED_ADS EXTENDED_SUBMIT_COMMANDS EXTENDED_SUBMIT_HELPFILE FetchWorkDelay FILETRANSFER_PLUGIN_CLASSAD_TIMEOUT FLOCK_FROM
+syn keyword htcKnob FLOCK_TO FORCE_NEGOTIATOR_SLOT_WEIGHT FS_ROOT_TO_CONDOR GANGLIAD_DEFAULT_CLUSTER GANGLIAD_DEFAULT_IP GANGLIAD_DEFAULT_MACHINE
+syn keyword htcKnob GANGLIAD_MIN_METRIC_LIFETIME GPU_DISCOVERY_EXTRA GRIDMANAGER_CHECKPROXY_INTERVAL GRIDMANAGER_EMPTY_RESOURCE_DELAY GRIDMANAGER_GAHP_CALL_TIMEOUT GRIDMANAGER_JOB_PROBE_INTERVAL
+syn keyword htcKnob GRIDMANAGER_JOB_PROBE_RATE GRIDMANAGER_MINIMUM_PROXY_TIME GRIDMANAGER_RESOURCE_PROBE_INTERVAL GROUP_DYNAMIC_MACH_CONSTRAINT HAD_CONTROLLEE HANDLE_QUERY_IN_PROC_POLICY
+syn keyword htcKnob HIBERNATE HIBERNATE_CHECK_INTERVAL HIBERNATION_OVERRIDE_WOL HIBERNATION_PLUGIN HIBERNATION_PLUGIN_ARGS HOLD_JOB_IF_CREDENTIAL_EXPIRES
+syn keyword htcKnob HTTP_PUBLIC_FILES_USER JOB_DEFAULT_NOTIFICATION JOB_EPOCH_HISTORY_DIR JOB_IS_FINISHED_COUNT JOB_IS_FINISHED_INTERVAL JOB_ROUTER_CREATE_IDTOKEN_NAMES
+syn keyword htcKnob JOB_ROUTER_DEFAULT_MAX_IDLE_JOBS_PER_ROUTE JOB_ROUTER_DEFAULT_MAX_JOBS_PER_ROUTE JOB_ROUTER_ENTRIES_REFRESH JOB_ROUTER_HOOK_KEYWORD JOB_ROUTER_IDTOKEN_REFRESH JOB_ROUTER_MAX_JOBS
+syn keyword htcKnob JOB_ROUTER_POST_ROUTE_TRANSFORM_NAMES JOB_ROUTER_PRE_ROUTE_TRANSFORM_NAMES JOB_ROUTER_RELEASE_ON_HOLD JOB_ROUTER_ROUTE_NAMES JOB_ROUTER_SCHEDD1_ADDRESS_FILE JOB_ROUTER_SCHEDD1_JOB_QUEUE_LOG
+syn keyword htcKnob JOB_ROUTER_SCHEDD1_NAME JOB_ROUTER_SCHEDD1_POOL JOB_ROUTER_SCHEDD2_ADDRESS_FILE JOB_ROUTER_SCHEDD2_JOB_QUEUE_LOG JOB_ROUTER_SCHEDD2_NAME JOB_ROUTER_SCHEDD2_POOL
+syn keyword htcKnob JOB_ROUTER_SEND_ROUTE_IDTOKENS JOB_STOP_COUNT JOB_STOP_DELAY JOB_TRANSFORM_NAMES KBDD_BUMP_CHECK_AFTER_IDLE_TIME KBDD_BUMP_CHECK_SIZE
+syn keyword htcKnob KEEP_DATA_CLAIM_IDLE KERBEROS_CLIENT_KEYTAB KERBEROS_SERVER_KEYTAB KERBEROS_SERVER_PRINCIPAL KERBEROS_SERVER_SERVICE KERBEROS_SERVER_USER
+syn keyword htcKnob LEGACY_ALLOW_SEMANTICS LIBRARIAN LIBRARIAN_DATABASE LIBRARIAN_DEBUG LIBRARIAN_HIGH_WATER_MARK LIBRARIAN_LOG
+syn keyword htcKnob LIBRARIAN_LOW_WATER_MARK LIBRARIAN_MAX_DATABASE_SIZE LIBRARIAN_MAX_JOBS_CACHED LIBRARIAN_MAX_UPDATES_PER_CYCLE LIBRARIAN_STATUS_RETENTION_SECONDS LIBRARIAN_UPDATE_INTERVAL
+syn keyword htcKnob LIBVIRT_XML_SCRIPT_ARGS LINUX_HIBERNATION_METHOD LOCAL_CREDMON_AUTHZ_GROUP_MAPFILE LOCAL_CREDMON_AUTHZ_GROUP_REQUIREMENT LOCAL_CREDMON_AUTHZ_GROUP_TEMPLATE LOCAL_CREDMON_AUTHZ_TEMPLATE
+syn keyword htcKnob LOCAL_CREDMON_AUTHZ_TEMPLATE_EXPR LOCAL_CREDMON_ISSUER LOCAL_CREDMON_KEY_ID LOCAL_CREDMON_PRIVATE_KEY LOCAL_CREDMON_PRIVATE_KEY_ALGORITHM LOCAL_CREDMON_PROVIDER_NAMES
+syn keyword htcKnob LOCAL_CREDMON_PUBLIC_KEY LOCAL_CREDMON_TOKEN_LIFETIME LOCK_FILE_UPDATE_INTERVAL LVM_CLEANUP_FAILURE_MAKES_BROKEN_SLOT LVM_THINPOOL_NAME LVM_VOLUME_GROUP_NAME
+syn keyword htcKnob MACHINE_RESOURCE_NAMES MAIL_FROM MASTER_ATTRS MaxJobRetirementTime MAXJOBRETIREMENTTIME MAX_CHECKPOINT_CLEANUP_PROCS
+syn keyword htcKnob MAX_CONCURRENT_UPLOADS_PER_USER MAX_DAEMON_HISTORY_LOG MAX_DAEMON_HISTORY_ROTATIONS MAX_EPOCH_HISTORY_LOG MAX_EPOCH_HISTORY_ROTATIONS MAX_EVENT_LOG
+syn keyword htcKnob MAX_FILE_DESCRIPTORS MAX_HISTORY_LOG MAX_HISTORY_ROTATIONS MAX_LIBRARIAN_LOG MAX_NEXT_JOB_START_DELAY MAX_NUM_CPUS
+syn keyword htcKnob MAX_NUM_SCHEDD_AUDIT_LOG MAX_NUM_SHARED_PORT_AUDIT_LOG MAX_SCHEDD_AUDIT_LOG MAX_SHADOW_STATS_LOG MAX_SHARED_PORT_AUDIT_LOG MAX_STARTER_STATS_LOG
+syn keyword htcKnob MAX_TRANSFER_QUEUE_AGE MEMORY MONITOR_COLLECTOR MONITOR_COLLECTOR_ADDR_ATTR MONITOR_COLLECTOR_AD_TYPE MONITOR_COLLECTOR_CONSTRAINT
+syn keyword htcKnob MONITOR_COLLECTOR_NAME_ATTR MONITOR_MULTIPLE_COLLECTORS MOUNT_PRIVATE_DEV_SHM NEGOTIATOR_CYCLE_DELAY NEGOTIATOR_HOST NEGOTIATOR_NAME
+syn keyword htcKnob NEGOTIATOR_SUBMITTER_CONSTRAINT NOBODY_SLOT_USER NOT_RESPONDING_WANT_CORE NO_JOB_NETWORKING NUM_CLAIMS NUM_SLOTS
+syn keyword htcKnob OAUTH2_CREDMON_PROVIDER_NAMES OFFLINE_EXPIRE_ADS_AFTER ParallelSchedulingGroup PREEMPTION_RANK_STABLE PREEMPTION_REQUIREMENTS_STABLE PREEN_CHECKPOINT_CLEANUP_TIMEOUT
+syn keyword htcKnob QUEUE_CLEAN_INTERVAL RANK REMOVE_SIGNIFICANT_ATTRIBUTES REQUEST_CLAIM_TIMEOUT RESERVED_DISK ROTATE_HISTORY_DAILY
+syn keyword htcKnob ROTATE_HISTORY_MONTHLY SCHEDD_ATTRS SCHEDD_AUDIT_LOG SCHEDD_CHECKPOINT_CLEANUP_TIMEOUT SCHEDD_CLUSTER_INCREMENT_VALUE SCHEDD_CLUSTER_INITIAL_VALUE
+syn keyword htcKnob SCHEDD_CLUSTER_MAXIMUM_VALUE SCHEDD_CRON_CONFIG_VAL SCHEDD_CRON_JOBLIST SCHEDD_CRON_LOG_NON_ZERO_EXIT SCHEDD_CRON_MAX_JOB_LOAD SCHEDD_ENABLE_SSH_TO_JOB
+syn keyword htcKnob SCHEDD_EXECUTE SCHEDD_HISTORY_RECORD_INTERVAL SCHEDD_HOST SCHEDD_INTERVAL_TIMESLICE SCHEDD_LOCK SCHEDD_USES_STARTD_FOR_LOCAL_UNIVERSE
+syn keyword htcKnob SCHEDULER_UNIVERSE_COOL_DOWN_DURATION SCITOKENS_FILE SEC_CREDENTIAL_DIRECTORY SEC_CREDENTIAL_DIRECTORY_KRB SEC_CREDENTIAL_DIRECTORY_OAUTH SEC_CREDENTIAL_GETTOKEN_OPTS
+syn keyword htcKnob SEC_CREDENTIAL_MONITOR SEC_CREDENTIAL_PRODUCER SEC_CREDENTIAL_STORER SEC_DEFAULT_CRYPTO_METHODS SEC_DEFAULT_NEGOTIATION SEC_SCITOKENS_PLUGIN_NAMES
+syn keyword htcKnob SEC_TCP_SESSION_DEADLINE SEC_USE_LOW_DATA_MODE SHADOW_LOG_RECONNECT SHADOW_QUEUE_UPDATE_INTERVAL SHADOW_RECONNECT_LOG SHADOW_RECONNECT_LOG_MAX
+syn keyword htcKnob SHADOW_RECONNECT_LOG_MAX_NUM SHADOW_RECONNECT_TIMEOUT_VERSION SHARED_PORT_ARGS SHARED_PORT_AUDIT_LOG SHARED_PORT_MAX_WORKERS SIGNIFICANT_ATTRIBUTES
+syn keyword htcKnob SINGULARITY_ADD_ROCM_FLAG SINGULARITY_BIND_EXPR SINGULARITY_EXTRA_ARGUMENTS SINGULARITY_IGNORE_MISSING_BIND_TARGET SINGULARITY_RUN_TEST_BEFORE_JOB SINGULARITY_TARGET_DIR
+syn keyword htcKnob SINGULARITY_USE_LAUNCHER SKIP_WINDOWS_LOGON_NETWORK SLOT_CONFIG_FAILURE_MODE SSH_TO_JOB_SSHD SSH_TO_JOB_SSHD_ARGS SSH_TO_JOB_SSHD_CONFIG_TEMPLATE
+syn keyword htcKnob SSH_TO_JOB_SSH_KEYGEN SSH_TO_JOB_SSH_KEYGEN_ARGS STARTD_CRON_CONFIG_VAL STARTD_CRON_JOBLIST STARTD_CRON_LOG_NON_ZERO_EXIT STARTD_CRON_MAX_JOB_LOAD
+syn keyword htcKnob STARTD_DIRECT_ATTACH_INTERVAL STARTD_DIRECT_ATTACH_SCHEDD_NAME STARTD_DIRECT_ATTACH_SCHEDD_POOL STARTD_DIRECT_ATTACH_SCHEDD_SUBMITTER STARTD_ENFORCE_DISK_LIMITS STARTD_PARTITIONABLE_SLOT_ATTRS
+syn keyword htcKnob STARTD_PRINT_ADS_FILTER STARTD_PRINT_ADS_ON_SHUTDOWN STARTD_PUBLISH_DOTNET STARTD_PUBLISH_WINREG STARTD_RECOMPUTE_DISK STARTER_ALLOW_JOB_PRE_AND_POST_CMD
+syn keyword htcKnob STARTER_ALLOW_RUNAS_OWNER STARTER_DEFAULT_JOB_HOOK_KEYWORD STARTER_DISABLE_USER_SUPPLIED_TRANSFER_PLUGINS STARTER_LOCAL_LOGGING STARTER_SETS_HOME_ENV STARTER_UPDATE_INTERVAL
+syn keyword htcKnob STARTER_UPDATE_INTERVAL_MAX STARTER_UPDATE_INTERVAL_TIMESLICE START_BACKFILL START_VANILLA_UNIVERSE STATE_FILE STATISTICS_TO_PUBLISH
+syn keyword htcKnob STATISTICS_TO_PUBLISH_LIST STRICT_CLASSAD_EVALUATION SUBMIT_MAX_PROCS_IN_CLUSTER SUBMIT_REQUEST_MISSING_UNITS SUBMIT_TEMPLATE_NAMES SYSTEM_ON_VACATE_COOL_DOWN
+syn keyword htcKnob SYSTEM_PERIODIC_HOLD SYSTEM_PERIODIC_HOLD_NAMES SYSTEM_PERIODIC_HOLD_REASON SYSTEM_PERIODIC_HOLD_SUBCODE SYSTEM_PERIODIC_RELEASE SYSTEM_PERIODIC_RELEASE_NAMES
+syn keyword htcKnob SYSTEM_PERIODIC_REMOVE SYSTEM_PERIODIC_REMOVE_NAMES SYSTEM_PERIODIC_VACATE SYSTEM_PERIODIC_VACATE_NAMES TOOL_DEBUG UDP_LOOPBACK_FRAGMENT_SIZE
+syn keyword htcKnob UDP_NETWORK_FRAGMENT_SIZE UNHIBERNATE UPDATE_OFFSET USERPRIO_USE_NEGOTIATOR_MODULAR_QUERY USE_CGROUPS_FOR_LOCAL_UNIVERSE USE_DEFAULT_CONTAINER
+syn keyword htcKnob USE_JOBSETS USE_PSS USING_LIBRARIAN VAULT_CREDMON_PROVIDER_NAMES VM_NETWORKING_BRIDGE_INTERFACE WALL_CLOCK_CKPT_INTERVAL
+syn keyword htcKnob WANT_HOLD WANT_HOLD_REASON WANT_HOLD_SUBCODE WINDOWED_STAT_WIDTH WINDOWS_RMDIR_OPTIONS
+
+" Documented macro-name patterns from the same manual page
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_ENVIRONMENT\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_EVICT_CLAIM\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_FETCH_WORK\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_JOB_CLEANUP\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_JOB_EXIT\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_JOB_EXIT_TIMEOUT\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_JOB_FINALIZE\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_PREPARE_JOB\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_PREPARE_JOB_ARGS\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_PREPARE_JOB_BEFORE_TRANSFER\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_REPLY_CLAIM\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_REPLY_FETCH\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_TRANSLATE_JOB\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_HOOK_UPDATE_JOB_INFO\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_LIMIT\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_AUTHORIZATION_URL\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_CLIENT_ID\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_CLIENT_SECRET_FILE\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_RETURN_URL_SUFFIX\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_TOKEN_URL\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_TEST_URL\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_[[:alnum:]_-]\+_LOG\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_ADDRESS_FILE\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_ADMIN_EMAIL\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_ARGS\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_ATTRS\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_CLASSAD_USER_MAP_NAMES\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_DAEMON_AD_FILE\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_DAEMON_HISTORY\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_DEBUG\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_LOCK\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_LOG\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_LOG_KEEP_OPEN\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_MAX_FILE_DESCRIPTORS\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_NOT_RESPONDING_TIMEOUT\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_SUPER_ADDRESS_FILE\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_TIMEOUT_MULTIPLIER\ze\s*='
+syn match   htcKnob display '^\s*\zs[[:alnum:]_]\+_USERID\ze\s*='
+syn match   htcKnob display '^\s*\zsALLOW_[[:alnum:]_.-]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_ARGS\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_CWD\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_ENV\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_EXECUTABLE\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_JOB_LOAD\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_KILL\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_MODE\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_PERIOD\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_PREFIX\ze\s*='
+syn match   htcKnob display '^\s*\zsBENCHMARKS_[[:alnum:]_]\+_SLOTS\ze\s*='
+syn match   htcKnob display '^\s*\zsCLASSAD_USER_MAPDATA_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsCLASSAD_USER_MAPFILE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsCONCURRENCY_LIMIT_DEFAULT_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsCONSUMPTION_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsDENY_[[:alnum:]_.-]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsENVIRONMENT_FOR_Assigned[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsENVIRONMENT_VALUE_FOR_UnAssigned[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsGROUP_ACCEPT_SURPLUS_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsGROUP_AUTOREGROUP_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsGROUP_PRIO_FACTOR_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsGROUP_QUOTA_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsGROUP_QUOTA_DYNAMIC_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsHA_[[:alnum:]_]\+_LOCK_HOLD_TIME\ze\s*='
+syn match   htcKnob display '^\s*\zsHA_[[:alnum:]_]\+_LOCK_URL\ze\s*='
+syn match   htcKnob display '^\s*\zsHA_[[:alnum:]_]\+_POLL_PERIOD\ze\s*='
+syn match   htcKnob display '^\s*\zsJOB_ROUTER_CREATE_IDTOKEN_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsJOB_ROUTER_ROUTE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsJOB_ROUTER_TRANSFORM_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsJOB_TRANSFORM_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsMACHINE_RESOURCE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsMACHINE_RESOURCE_INVENTORY_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsMASTER_[[:alnum:]_]\+_BACKOFF_CEILING\ze\s*='
+syn match   htcKnob display '^\s*\zsMASTER_[[:alnum:]_]\+_BACKOFF_CONSTANT\ze\s*='
+syn match   htcKnob display '^\s*\zsMASTER_[[:alnum:]_]\+_BACKOFF_FACTOR\ze\s*='
+syn match   htcKnob display '^\s*\zsMASTER_[[:alnum:]_]\+_RECOVER_FACTOR\ze\s*='
+syn match   htcKnob display '^\s*\zsMASTER_[[:alnum:]_]\+_CONTROLLER\ze\s*='
+syn match   htcKnob display '^\s*\zsMASTER_SHUTDOWN_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsMAX_[[:alnum:]_]\+_[[:alnum:]_-]\+_LOG\ze\s*='
+syn match   htcKnob display '^\s*\zsMAX_[[:alnum:]_]\+_LOG\ze\s*='
+syn match   htcKnob display '^\s*\zsMAX_NUM_[[:alnum:]_]\+_LOG\ze\s*='
+syn match   htcKnob display '^\s*\zsNUM_SLOTS_TYPE_[0-9]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsOFFLINE_MACHINE_RESOURCE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsOPEN_VERB_FOR_[[:alnum:]_]\+_FILES\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_COLLECT_STATS_BY_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_COLLECT_STATS_FOR_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_ARGS\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_CWD\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_ENV\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_EXECUTABLE\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_JOB_LOAD\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_KILL\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_MODE\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_PERIOD\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_PREFIX\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_RECONFIG\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_CRON_[[:alnum:]_]\+_RECONFIG_RERUN\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_EXPIRE_STATS_BY_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSCHEDD_ROUND_ATTR_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_.-]\+_AUTHENTICATION\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_.-]\+_AUTHENTICATION_METHODS\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_.-]\+_CRYPTO_METHODS\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_.-]\+_ENCRYPTION\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_.-]\+_INTEGRITY\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_.-]\+_NEGOTIATION\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_-]\+_SESSION_DURATION\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_[[:alnum:]_-]\+_SESSION_LEASE\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_SCITOKENS_PLUGIN_[[:alnum:]_]\+_COMMAND\ze\s*='
+syn match   htcKnob display '^\s*\zsSEC_SCITOKENS_PLUGIN_[[:alnum:]_]\+_MAPPING\ze\s*='
+syn match   htcKnob display '^\s*\zsSETTABLE_ATTRS_[[:alnum:]_-]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSLOT[0-9]\+_CPU_AFFINITY\ze\s*='
+syn match   htcKnob display '^\s*\zsSLOT[0-9]\+_EXECUTE\ze\s*='
+syn match   htcKnob display '^\s*\zsSLOT[0-9]\+_JOB_HOOK_KEYWORD\ze\s*='
+syn match   htcKnob display '^\s*\zsSLOT[0-9]\+_STARTD_ATTRS\ze\s*='
+syn match   htcKnob display '^\s*\zsSLOT[0-9]\+_USER\ze\s*='
+syn match   htcKnob display '^\s*\zsSLOT_TYPE_[0-9]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSLOT_TYPE_[0-9]\+_PARTITIONABLE\ze\s*='
+syn match   htcKnob display '^\s*\zsSSH_TO_JOB_[[:alnum:]_-]\+_CMD\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_ARGS\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_CONDITION\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_CWD\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_ENV\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_EXECUTABLE\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_JOB_LOAD\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_KILL\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_METRICS\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_MODE\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_PERIOD\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_PREFIX\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_RECONFIG\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_RECONFIG_RERUN\ze\s*='
+syn match   htcKnob display '^\s*\zsSTARTD_CRON_[[:alnum:]_]\+_SLOTS\ze\s*='
+syn match   htcKnob display '^\s*\zsSTATISTICS_WINDOW_QUANTUM_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSTATISTICS_WINDOW_SECONDS_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSUBMIT_REQUIREMENT_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSUBMIT_REQUIREMENT_[[:alnum:]_]\+_REASON\ze\s*='
+syn match   htcKnob display '^\s*\zsSUBMIT_TEMPLATE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSYSTEM_PERIODIC_HOLD_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSYSTEM_PERIODIC_HOLD_[[:alnum:]_]\+_REASON\ze\s*='
+syn match   htcKnob display '^\s*\zsSYSTEM_PERIODIC_HOLD_[[:alnum:]_]\+_SUBCODE\ze\s*='
+syn match   htcKnob display '^\s*\zsSYSTEM_PERIODIC_RELEASE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSYSTEM_PERIODIC_REMOVE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsSYSTEM_PERIODIC_VACATE_[[:alnum:]_]\+\ze\s*='
+syn match   htcKnob display '^\s*\zsTRUNC_[[:alnum:]_]\+_[[:alnum:]_-]\+_LOG_ON_OPEN\ze\s*='
+syn match   htcKnob display '^\s*\zsTRUNC_[[:alnum:]_]\+_LOG_ON_OPEN\ze\s*='
 syntax case match
 
-syn match   htcKnob display 'request_[a-zA-Z\.]\+'
-syn match   htcCustomKnob display '^+[a-zA-Z0-9]\+'
+syn match   htcKnob       display '^\s*\zsrequest_[[:alnum:]_.-]\+\ze\s*='
 
 " HTC Machine ClassAds
 syntax case ignore
@@ -1524,57 +1765,108 @@ syn keyword htcJobClassAd UserLog
 syn keyword htcJobClassAd WhenToTransferOutput
 syn case match
 
-" Syntax keywords have priority over line matches, so use a window-local
-" overlay to mark the whole invalid line, including known HTCondor knobs.
-function! s:ApplyInvalidCommentMatch() abort
+" Configuration structure overrides
+syn case ignore
+syn region  htcIncludeLine         matchgroup=htcInclude start=/^\s*\zs@\?include\>\%([^=]*:\)\@=/ end=/$/ oneline contains=htcIncludeOption,htcIncludeColon,@htcValues
+syn keyword htcIncludeOption       ifexist ifexists command into contained
+syn match   htcIncludeColon        /:/ contained
+syn region  htcUseLine             matchgroup=htcUse start=/^\s*\zsuse\>/ end=/$/ oneline contains=htcUseOption,htcIncludeColon,@htcValues
+syn keyword htcUseOption           feature role policy contained
+syn region  htcMessageLine         matchgroup=htcMessage start=/^\s*\zs\%(warning\|error\)\>/ end=/$/ oneline contains=@htcValues
+syn region  htcConditionalLine     matchgroup=htcConditional start=/^\s*\zs\%(if\|elif\)\>/ end=/$/ oneline contains=htcConditionalNot,htcConditionalKeyword,@htcValues
+syn match   htcConditional         /^\s*\zs\%(else\|endif\)\>/
+syn match   htcConditionalNot      /!/ contained
+syn keyword htcConditionalKeyword  defined version contained
+syn case match
+
+" Syntax keywords have priority over some line matches, so use window-local
+" overlays for constructs that must visually override known HTCondor knobs.
+function! s:ApplySyntaxMatches() abort
   if !exists('*matchadd') || !exists('b:htc_invalid_comment_pattern')
     return
   endif
 
-  call s:ClearInvalidCommentMatch()
-  let w:htc_invalid_comment_match = matchadd('htcInvalidComment', b:htc_invalid_comment_pattern, 100)
+  call s:ClearSyntaxMatches()
+  let w:htc_syntax_matches = []
+  call add(w:htc_syntax_matches, matchadd('htcInvalidComment', b:htc_invalid_comment_pattern, 100))
+  let l:include_directive = '\c^\s*@\?include\>\%([^=]*:\)\@='
+  call add(w:htc_syntax_matches, matchadd('htcInclude', l:include_directive, 95))
+  call add(w:htc_syntax_matches, matchadd('htcIncludeOption', l:include_directive . '.\{-}\s\+\zsifexists\?\>', 95))
+  call add(w:htc_syntax_matches, matchadd('htcIncludeOption', l:include_directive . '.\{-}\s\+\zscommand\>', 95))
+  call add(w:htc_syntax_matches, matchadd('htcIncludeOption', l:include_directive . '.\{-}\s\+\zsinto\>', 95))
+  call add(w:htc_syntax_matches, matchadd('htcIncludeColon', l:include_directive . '.\{-}\zs:', 95))
+  call add(w:htc_syntax_matches, matchadd('htcConditionalNot', '\c^\s*\%(if\|elif\)\s\+\zs!', 95))
+  call add(w:htc_syntax_matches, matchadd('htcConditionalKeyword', '\c^\s*\%(if\|elif\)\s\+!\?\s*\zs\%(defined\|version\)\>', 95))
 endfunction
 
-function! s:ClearInvalidCommentMatch() abort
-  if exists('w:htc_invalid_comment_match')
+function! s:ClearSyntaxMatches() abort
+  if exists('w:htc_syntax_matches')
+    for l:match_id in w:htc_syntax_matches
+      silent! call matchdelete(l:match_id)
+    endfor
+    unlet w:htc_syntax_matches
+  elseif exists('w:htc_invalid_comment_match')
     silent! call matchdelete(w:htc_invalid_comment_match)
     unlet w:htc_invalid_comment_match
   endif
 endfunction
 
-augroup htc_config_invalid_comment
+augroup htc_config_syntax_matches
   autocmd! * <buffer>
-  autocmd BufWinEnter,WinEnter <buffer> call <SID>ApplyInvalidCommentMatch()
-  autocmd BufWinLeave <buffer> call <SID>ClearInvalidCommentMatch()
+  autocmd BufWinEnter,WinEnter <buffer> call <SID>ApplySyntaxMatches()
+  autocmd BufWinLeave <buffer> call <SID>ClearSyntaxMatches()
 augroup END
 
-call s:ApplyInvalidCommentMatch()
+call s:ApplySyntaxMatches()
 
 " Highlight Links
-hi def link htcNumber           Number
-hi def link htcNumberFloat      Float
+hi def link htcNumber              Number
+hi def link htcNumberFloat         Float
+hi def link htcBool                Boolean
+hi def link htcClassAdConst        Constant
+hi def link htcString              String
+hi def link htcStringEscape        SpecialChar
 
-hi def link htcComment          Comment
-hi def htcInvalidComment        ctermbg=9 guibg=#ff0000
+hi def link htcComment             Comment
+hi def link htcTodo                Todo
+hi def htcInvalidComment           ctermbg=9 guibg=#ff0000
 
-hi def link htcBool             Boolean
-hi def link htcString           String
+hi def link htcAssignment          Operator
+hi def link htcInclude             Include
+hi def link htcIncludeOption       Keyword
+hi def link htcIncludeColon        Delimiter
+hi def link htcUse                 Include
+hi def link htcUseOption           Keyword
+hi def link htcMessage             WarningMsg
+hi def link htcConditional         Conditional
+hi def link htcConditionalNot      Operator
+hi def link htcConditionalKeyword  Keyword
 
-hi def link htcUrl              Underlined
-hi def link htcIPv4             Underlined
-hi def link htcIPv6             Underlined
-hi def link htcPath             Keyword
+hi def link htcConfigFunction      Function
+hi def link htcClassAdFunction     Function
+hi def link htcClassAdScope        Identifier
+hi def link htcClassAdKeyword      Keyword
+hi def link htcOperator            Operator
+hi def link htcDelimiter           Delimiter
 
-hi def link htcKnob             Structure
-hi def link htcMachineClassAd   Added
-hi def link htcJobClassAd       Function
-hi def link htcCustomKnob       Keyword
+hi def link htcUrl                 Underlined
+hi def link htcIPv4                Constant
+hi def link htcIPv6                Constant
+hi def link htcPath                Directory
+hi def link htcDebugFlag           Special
+hi def link htcState               Identifier
+hi def link htcLineContinuation    Special
 
-hi def link htcUniverse         Identifier
-hi def link htcTransOut         Identifier
-hi def link htcVariable         Statement
+hi def link htcKnob                Structure
+hi def link htcMachineClassAd      Added
+hi def link htcJobClassAd          Function
+hi def htcCustomKnob               term=bold cterm=bold ctermfg=81 gui=bold guifg=#5fd7ff
 
-let b:current_syntax = "htc"
+hi def link htcUniverse            Identifier
+hi def link htcTransOut            Identifier
+hi def link htcVariable            Statement
+
+let b:current_syntax = "htc-config"
 
 let &cpo = s:cpo_save
 unlet s:htc_double_string
@@ -1583,4 +1875,5 @@ unlet s:htc_single_string
 unlet s:htc_plain_quote
 unlet s:htc_inline_part
 unlet s:htc_inline_start
+unlet s:htc_regexp_assignment
 unlet s:cpo_save
