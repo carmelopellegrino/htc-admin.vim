@@ -1,7 +1,7 @@
 " Vim syntax file
 " Language:         HTCondor Configuration file
 " Maintainer:       Carmelo Pellegrino <carmelo.pellegrino@cnaf.infn.it>
-" Latest Revision:  2026-07-21
+" Latest Revision:  2026-07-22
 
 if exists("b:current_syntax")
   finish
@@ -67,6 +67,36 @@ syn match   htcIPv6                display '\<\x\{1,4}\%(:\x\{1,4}\)\{2,7}\%(:\d
 syn match   htcPath                display #\%(^\|[[:space:]=:,]\)\zs\%(/\|\~/\)[^[:space:],"'`)]\+# contained
 syn keyword htcDebugFlag           D_ALWAYS D_ERROR D_STATUS D_FULLDEBUG D_DAEMONCORE D_COMMAND D_PRIV D_SECURITY D_CONFIG D_PROTOCOL D_LOAD D_KEYBOARD D_JOB D_MACHINE D_SYSCALLS D_MATCH D_NETWORK D_HOSTNAME D_ACCOUNTANT D_PID D_FDS D_CAT D_NOHEADER D_TIMESTAMP D_SUB_SECOND D_CATEGORY D_IDENT D_BACKTRACE D_VERBOSE D_AUDIT D_TEST D_PERF_TRACE D_STATS D_FAILURE D_MATERIALIZE contained
 syn keyword htcState               Owner Unclaimed Claimed Matched Preempting Drained Backfill Idle Busy Suspended Vacating Killing Benchmarking contained
+syn match   htcDaemonName          /$^/ contained
+syn match   htcCustomDaemonName    /$^/ contained
+
+let s:htc_standard_daemons = [
+      \ 'ADSTASH',
+      \ 'COLLECTOR',
+      \ 'CREDD',
+      \ 'CREDMON_KRB',
+      \ 'CREDMON_OAUTH',
+      \ 'DAGMAN',
+      \ 'DEFRAG',
+      \ 'GANGLIAD',
+      \ 'GRIDMANAGER',
+      \ 'HAD',
+      \ 'JOB_ROUTER',
+      \ 'KBDD',
+      \ 'MASTER',
+      \ 'NEGOTIATOR',
+      \ 'REPLICATION',
+      \ 'ROOSTER',
+      \ 'SCHEDD',
+      \ 'SHADOW',
+      \ 'SHARED_PORT',
+      \ 'STARTD',
+      \ ]
+let s:htc_standard_daemon_lookup = {}
+for s:htc_daemon in s:htc_standard_daemons
+  let s:htc_standard_daemon_lookup[s:htc_daemon] = 1
+endfor
+unlet s:htc_daemon
 
 " Configuration macro functions
 syn match htcConfigFunction /\C\$\%(CHOICE\|ENV\|DIRNAME\|BASENAME\|INT\|RANDOM_CHOICE\|RANDOM_INTEGER\|REAL\|SUBSTR\|STRING\|EVAL\)\>\ze\s*(/
@@ -1779,6 +1809,95 @@ syn match   htcConditionalNot      /!/ contained
 syn keyword htcConditionalKeyword  defined version contained
 syn case match
 
+function! s:SkipQuotedConfigValue(text, start) abort
+  let l:quote = strpart(a:text, a:start, 1)
+  let l:index = a:start + 1
+  let l:length = strlen(a:text)
+
+  while l:index < l:length
+    let l:char = strpart(a:text, l:index, 1)
+    if l:char ==# '\'
+      let l:index += 2
+    elseif l:char ==# l:quote
+      return l:index + 1
+    else
+      let l:index += 1
+    endif
+  endwhile
+
+  return l:length
+endfunction
+
+function! s:DaemonListTokenPositions() abort
+  let l:standard_positions = []
+  let l:custom_positions = []
+
+  for l:lnum in range(1, line('$'))
+    let l:line = getline(l:lnum)
+    let l:index = matchend(l:line, '\c^\s*DAEMON_LIST\s*=')
+    if l:index < 0
+      continue
+    endif
+
+    let l:length = strlen(l:line)
+    while l:index < l:length
+      let l:char = strpart(l:line, l:index, 1)
+
+      if l:char =~# '[[:space:],+]'
+        let l:index += 1
+        continue
+      endif
+      if l:char ==# '#'
+        break
+      endif
+      if l:char ==# '$'
+        let l:macro_end = match(l:line, ')', l:index)
+        let l:index = l:macro_end < 0 ? l:index + 1 : l:macro_end + 1
+        continue
+      endif
+      if l:char =~# '["''`]'
+        let l:index = s:SkipQuotedConfigValue(l:line, l:index)
+        continue
+      endif
+      if l:char =~# '[[:alpha:]_]'
+        let l:token = matchstr(strpart(l:line, l:index), '^[[:alpha:]_][[:alnum:]_]*')
+        if empty(l:token)
+          let l:index += 1
+          continue
+        endif
+
+        let l:token_key = toupper(l:token)
+        let l:position = [l:lnum, l:index + 1, strlen(l:token)]
+        if has_key(s:htc_standard_daemon_lookup, l:token_key)
+          call add(l:standard_positions, l:position)
+        else
+          call add(l:custom_positions, l:position)
+        endif
+        let l:index += strlen(l:token)
+        continue
+      endif
+
+      let l:index += 1
+    endwhile
+  endfor
+
+  return [l:standard_positions, l:custom_positions]
+endfunction
+
+function! s:AddDaemonListSyntaxMatches() abort
+  if !exists('*matchaddpos')
+    return
+  endif
+
+  let [l:standard_positions, l:custom_positions] = s:DaemonListTokenPositions()
+  if !empty(l:custom_positions)
+    call add(w:htc_syntax_matches, matchaddpos('htcCustomDaemonName', l:custom_positions, 96))
+  endif
+  if !empty(l:standard_positions)
+    call add(w:htc_syntax_matches, matchaddpos('htcDaemonName', l:standard_positions, 97))
+  endif
+endfunction
+
 " Syntax keywords have priority over some line matches, so use window-local
 " overlays for constructs that must visually override known HTCondor knobs.
 function! s:ApplySyntaxMatches() abort
@@ -1789,6 +1908,7 @@ function! s:ApplySyntaxMatches() abort
   call s:ClearSyntaxMatches()
   let w:htc_syntax_matches = []
   call add(w:htc_syntax_matches, matchadd('htcInvalidComment', b:htc_invalid_comment_pattern, 100))
+  call s:AddDaemonListSyntaxMatches()
   let l:include_directive = '\c^\s*@\?include\>\%([^=]*:\)\@='
   call add(w:htc_syntax_matches, matchadd('htcInclude', l:include_directive, 95))
   call add(w:htc_syntax_matches, matchadd('htcIncludeOption', l:include_directive . '.\{-}\s\+\zsifexists\?\>', 95))
@@ -1814,6 +1934,12 @@ endfunction
 augroup htc_config_syntax_matches
   autocmd! * <buffer>
   autocmd BufWinEnter,WinEnter <buffer> call <SID>ApplySyntaxMatches()
+  if exists('##TextChanged')
+    autocmd TextChanged <buffer> call <SID>ApplySyntaxMatches()
+  endif
+  if exists('##TextChangedI')
+    autocmd TextChangedI <buffer> call <SID>ApplySyntaxMatches()
+  endif
   autocmd BufWinLeave <buffer> call <SID>ClearSyntaxMatches()
 augroup END
 
@@ -1858,6 +1984,8 @@ hi def link htcState               Identifier
 hi def link htcLineContinuation    Special
 
 hi def link htcKnob                Structure
+hi def htcDaemonName               term=bold cterm=bold ctermfg=2 gui=bold guifg=#00af00
+hi def htcCustomDaemonName         term=bold cterm=bold ctermfg=81 gui=bold guifg=#5fd7ff
 hi def link htcMachineClassAd      Added
 hi def link htcJobClassAd          Function
 hi def htcCustomKnob               term=bold cterm=bold ctermfg=81 gui=bold guifg=#5fd7ff
