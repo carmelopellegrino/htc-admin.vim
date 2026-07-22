@@ -1984,7 +1984,7 @@ hi def link htcState               Identifier
 hi def link htcLineContinuation    Special
 
 hi def link htcKnob                Structure
-hi def htcDaemonName               term=bold cterm=bold ctermfg=2 gui=bold guifg=#00af00
+hi def htcDaemonName               term=bold cterm=bold ctermfg=2 gui=bold guifg=#5fdb46
 hi def htcCustomDaemonName         term=bold cterm=bold ctermfg=81 gui=bold guifg=#5fd7ff
 hi def link htcMachineClassAd      Added
 hi def link htcJobClassAd          Function
