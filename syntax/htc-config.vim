@@ -69,6 +69,7 @@ syn keyword htcDebugFlag           D_ALWAYS D_ERROR D_STATUS D_FULLDEBUG D_DAEMO
 syn keyword htcState               Owner Unclaimed Claimed Matched Preempting Drained Backfill Idle Busy Suspended Vacating Killing Benchmarking contained
 syn match   htcDaemonName          /$^/ contained
 syn match   htcCustomDaemonName    /$^/ contained
+syn match   htcCronModeValue       /$^/ contained
 
 let s:htc_standard_daemons = [
       \ 'ADSTASH',
@@ -97,6 +98,11 @@ for s:htc_daemon in s:htc_standard_daemons
   let s:htc_standard_daemon_lookup[s:htc_daemon] = 1
 endfor
 unlet s:htc_daemon
+
+let s:htc_cron_mode_values = {
+      \ 'ONESHOT': 1,
+      \ 'PERIODIC': 1,
+      \ }
 
 " Configuration macro functions
 syn match htcConfigFunction /\C\$\%(CHOICE\|ENV\|DIRNAME\|BASENAME\|INT\|RANDOM_CHOICE\|RANDOM_INTEGER\|REAL\|SUBSTR\|STRING\|EVAL\)\>\ze\s*(/
@@ -1898,6 +1904,68 @@ function! s:AddDaemonListSyntaxMatches() abort
   endif
 endfunction
 
+function! s:CronModeValuePositions() abort
+  let l:positions = []
+
+  for l:lnum in range(1, line('$'))
+    let l:line = getline(l:lnum)
+    let l:index = matchend(l:line, '\c^\s*[[:alpha:]_][[:alnum:]_.-]*_CRON_[[:alnum:]_.-]\+_MODE\s*=')
+    if l:index < 0
+      continue
+    endif
+
+    let l:length = strlen(l:line)
+    while l:index < l:length
+      let l:char = strpart(l:line, l:index, 1)
+
+      if l:char =~# '[[:space:],+]'
+        let l:index += 1
+        continue
+      endif
+      if l:char ==# '#'
+        break
+      endif
+      if l:char ==# '$'
+        let l:macro_end = match(l:line, ')', l:index)
+        let l:index = l:macro_end < 0 ? l:index + 1 : l:macro_end + 1
+        continue
+      endif
+      if l:char =~# '["''`]'
+        let l:index = s:SkipQuotedConfigValue(l:line, l:index)
+        continue
+      endif
+      if l:char =~# '[[:alpha:]_]'
+        let l:token = matchstr(strpart(l:line, l:index), '^[[:alpha:]_][[:alnum:]_]*')
+        if empty(l:token)
+          let l:index += 1
+          continue
+        endif
+
+        if has_key(s:htc_cron_mode_values, toupper(l:token))
+          call add(l:positions, [l:lnum, l:index + 1, strlen(l:token)])
+        endif
+        let l:index += strlen(l:token)
+        continue
+      endif
+
+      let l:index += 1
+    endwhile
+  endfor
+
+  return l:positions
+endfunction
+
+function! s:AddCronModeSyntaxMatches() abort
+  if !exists('*matchaddpos')
+    return
+  endif
+
+  let l:positions = s:CronModeValuePositions()
+  if !empty(l:positions)
+    call add(w:htc_syntax_matches, matchaddpos('htcCronModeValue', l:positions, 97))
+  endif
+endfunction
+
 " Syntax keywords have priority over some line matches, so use window-local
 " overlays for constructs that must visually override known HTCondor knobs.
 function! s:ApplySyntaxMatches() abort
@@ -1909,6 +1977,7 @@ function! s:ApplySyntaxMatches() abort
   let w:htc_syntax_matches = []
   call add(w:htc_syntax_matches, matchadd('htcInvalidComment', b:htc_invalid_comment_pattern, 100))
   call s:AddDaemonListSyntaxMatches()
+  call s:AddCronModeSyntaxMatches()
   let l:include_directive = '\c^\s*@\?include\>\%([^=]*:\)\@='
   call add(w:htc_syntax_matches, matchadd('htcInclude', l:include_directive, 95))
   call add(w:htc_syntax_matches, matchadd('htcIncludeOption', l:include_directive . '.\{-}\s\+\zsifexists\?\>', 95))
@@ -1986,6 +2055,7 @@ hi def link htcLineContinuation    Special
 hi def link htcKnob                Structure
 hi def htcDaemonName               term=bold cterm=bold ctermfg=2 gui=bold guifg=#5fdb46
 hi def htcCustomDaemonName         term=bold cterm=bold ctermfg=81 gui=bold guifg=#5fd7ff
+hi def link htcCronModeValue       htcDaemonName
 hi def link htcMachineClassAd      Added
 hi def link htcJobClassAd          Function
 hi def htcCustomKnob               term=bold cterm=bold ctermfg=81 gui=bold guifg=#5fd7ff
